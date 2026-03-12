@@ -1,6 +1,6 @@
 import type { Settings } from '../config.js';
-import type { OwmCurrentData, OwmDailyData, OwmAlert, OwmOneCallResponse } from '../models.js';
-import { OwmOneCallResponseSchema } from '../models.js';
+import type { OwmCurrentWeatherResponse, OwmForecastResponse } from '../models.js';
+import { OwmCurrentWeatherResponseSchema, OwmForecastResponseSchema } from '../models.js';
 import {
   WeatherAPIError,
   WeatherAPINotFoundError,
@@ -10,57 +10,29 @@ import {
 export class OpenWeatherMapClient {
   constructor(private settings: Settings) {}
 
-  async getCurrentWeather(
-    lat: number,
-    lon: number,
-  ): Promise<{ current: OwmCurrentData; timezone: string }> {
-    const data = await this.fetchOneCall(lat, lon, [
-      'minutely',
-      'hourly',
-      'daily',
-      'alerts',
-    ]);
-    if (!data.current) {
-      throw new WeatherAPIError(500, 'No current weather data in API response');
-    }
-    return { current: data.current, timezone: data.timezone };
-  }
-
-  async getDailyForecast(
-    lat: number,
-    lon: number,
-  ): Promise<{ daily: OwmDailyData[]; timezone: string }> {
-    const data = await this.fetchOneCall(lat, lon, [
-      'current',
-      'minutely',
-      'hourly',
-      'alerts',
-    ]);
-    return { daily: data.daily ?? [], timezone: data.timezone };
-  }
-
-  async getAlerts(lat: number, lon: number): Promise<OwmAlert[]> {
-    const data = await this.fetchOneCall(lat, lon, [
-      'current',
-      'minutely',
-      'hourly',
-      'daily',
-    ]);
-    return data.alerts ?? [];
-  }
-
-  private async fetchOneCall(
-    lat: number,
-    lon: number,
-    exclude: string[],
-  ): Promise<OwmOneCallResponse> {
-    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/onecall`);
+  async getCurrentWeather(lat: number, lon: number): Promise<OwmCurrentWeatherResponse> {
+    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/weather`);
     url.searchParams.set('lat', lat.toString());
     url.searchParams.set('lon', lon.toString());
-    url.searchParams.set('exclude', exclude.join(','));
     url.searchParams.set('units', 'metric');
     url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
 
+    const json = await this.fetchApi(url);
+    return OwmCurrentWeatherResponseSchema.parse(json);
+  }
+
+  async getForecast(lat: number, lon: number): Promise<OwmForecastResponse> {
+    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/forecast`);
+    url.searchParams.set('lat', lat.toString());
+    url.searchParams.set('lon', lon.toString());
+    url.searchParams.set('units', 'metric');
+    url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
+
+    const json = await this.fetchApi(url);
+    return OwmForecastResponseSchema.parse(json);
+  }
+
+  private async fetchApi(url: URL): Promise<unknown> {
     let response: Response;
     try {
       response = await fetch(url.toString(), {
@@ -83,7 +55,6 @@ export class OpenWeatherMapClient {
       throw new WeatherAPIError(response.status, body);
     }
 
-    const json: unknown = await response.json();
-    return OwmOneCallResponseSchema.parse(json);
+    return response.json();
   }
 }

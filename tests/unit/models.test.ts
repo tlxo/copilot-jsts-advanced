@@ -73,18 +73,12 @@ describe('ForecastQuerySchema', () => {
   });
 
   it('rejects days out of range', () => {
-    expect(() =>
-      ForecastQuerySchema.parse({ lat: '0', lon: '0', days: '0' }),
-    ).toThrow();
-    expect(() =>
-      ForecastQuerySchema.parse({ lat: '0', lon: '0', days: '6' }),
-    ).toThrow();
+    expect(() => ForecastQuerySchema.parse({ lat: '0', lon: '0', days: '0' })).toThrow();
+    expect(() => ForecastQuerySchema.parse({ lat: '0', lon: '0', days: '6' })).toThrow();
   });
 
   it('rejects non-integer days', () => {
-    expect(() =>
-      ForecastQuerySchema.parse({ lat: '0', lon: '0', days: '2.5' }),
-    ).toThrow();
+    expect(() => ForecastQuerySchema.parse({ lat: '0', lon: '0', days: '2.5' })).toThrow();
   });
 });
 
@@ -112,15 +106,11 @@ describe('LocationCreateSchema', () => {
   });
 
   it('rejects empty name', () => {
-    expect(() =>
-      LocationCreateSchema.parse({ name: '', lat: 0, lon: 0 }),
-    ).toThrow();
+    expect(() => LocationCreateSchema.parse({ name: '', lat: 0, lon: 0 })).toThrow();
   });
 
   it('rejects name over 200 chars', () => {
-    expect(() =>
-      LocationCreateSchema.parse({ name: 'a'.repeat(201), lat: 0, lon: 0 }),
-    ).toThrow();
+    expect(() => LocationCreateSchema.parse({ name: 'a'.repeat(201), lat: 0, lon: 0 })).toThrow();
   });
 
   it('accepts name at 200 chars', () => {
@@ -133,15 +123,11 @@ describe('LocationCreateSchema', () => {
   });
 
   it('rejects lat out of range', () => {
-    expect(() =>
-      LocationCreateSchema.parse({ name: 'X', lat: 91, lon: 0 }),
-    ).toThrow();
+    expect(() => LocationCreateSchema.parse({ name: 'X', lat: 91, lon: 0 })).toThrow();
   });
 
   it('rejects lon out of range', () => {
-    expect(() =>
-      LocationCreateSchema.parse({ name: 'X', lat: 0, lon: 181 }),
-    ).toThrow();
+    expect(() => LocationCreateSchema.parse({ name: 'X', lat: 0, lon: 181 })).toThrow();
   });
 });
 

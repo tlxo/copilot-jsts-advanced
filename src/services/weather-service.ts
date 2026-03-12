@@ -5,14 +5,11 @@ import type {
   ForecastDay,
   TemperatureUnit,
   WeatherAlert,
+  AlertSeverity,
+  OwmForecastItem,
 } from '../models.js';
 import { celsiusToFahrenheit, celsiusToKelvin } from '../utils/converters.js';
 import type { OpenWeatherMapClient } from './openweathermap.js';
-
-function timezoneToLocationName(timezone: string): string {
-  const parts = timezone.split('/');
-  return (parts[parts.length - 1] ?? timezone).replace(/_/g, ' ');
-}
 
 function convertTemperature(celsius: number, units: TemperatureUnit): number {
   switch (units) {
@@ -24,6 +21,49 @@ function convertTemperature(celsius: number, units: TemperatureUnit): number {
     default:
       return celsius;
   }
+}
+
+function mostCommon<T>(items: T[]): T {
+  const counts = new Map<T, number>();
+  for (const item of items) {
+    counts.set(item, (counts.get(item) ?? 0) + 1);
+  }
+  let best = items[0]!;
+  let bestCount = 0;
+  for (const [item, count] of counts) {
+    if (count > bestCount) {
+      best = item;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+function aggregateForecastByDay(items: OwmForecastItem[]): ForecastDay[] {
+  const grouped = new Map<string, OwmForecastItem[]>();
+  for (const item of items) {
+    const date = item.dt_txt.split(' ')[0]!;
+    const group = grouped.get(date);
+    if (group) {
+      group.push(item);
+    } else {
+      grouped.set(date, [item]);
+    }
+  }
+
+  const days: ForecastDay[] = [];
+  for (const [date, group] of grouped) {
+    days.push({
+      date,
+      tempMin: Math.min(...group.map((i) => i.main.temp_min)),
+      tempMax: Math.max(...group.map((i) => i.main.temp_max)),
+      humidity: Math.round(group.reduce((sum, i) => sum + i.main.humidity, 0) / group.length),
+      description: mostCommon(group.map((i) => i.weather[0]!.description)),
+      icon: mostCommon(group.map((i) => i.weather[0]!.icon)),
+    });
+  }
+
+  return days;
 }
 
 export class WeatherService {
@@ -38,19 +78,19 @@ export class WeatherService {
     units: TemperatureUnit = 'celsius',
     locationName?: string,
   ): Promise<CurrentWeather> {
-    const { current, timezone } = await this.client.getCurrentWeather(lat, lon);
+    const data = await this.client.getCurrentWeather(lat, lon);
 
     return {
-      temperature: convertTemperature(current.temp, units),
-      feelsLike: convertTemperature(current.feels_like, units),
-      humidity: current.humidity,
-      pressure: current.pressure,
-      windSpeed: current.wind_speed,
-      windDirection: current.wind_deg,
-      description: current.weather[0]!.description,
-      icon: current.weather[0]!.icon,
-      timestamp: current.dt,
-      locationName: locationName ?? timezoneToLocationName(timezone),
+      temperature: convertTemperature(data.main.temp, units),
+      feelsLike: convertTemperature(data.main.feels_like, units),
+      humidity: data.main.humidity,
+      pressure: data.main.pressure,
+      windSpeed: data.wind.speed,
+      windDirection: data.wind.deg,
+      description: data.weather[0]!.description,
+      icon: data.weather[0]!.icon,
+      timestamp: data.dt,
+      locationName: locationName ?? data.name,
       units,
     };
   }
@@ -62,33 +102,80 @@ export class WeatherService {
     units: TemperatureUnit = 'celsius',
     locationName?: string,
   ): Promise<Forecast> {
-    const { daily, timezone } = await this.client.getDailyForecast(lat, lon);
+    const data = await this.client.getForecast(lat, lon);
+    const aggregated = aggregateForecastByDay(data.list);
 
-    const forecastDays: ForecastDay[] = daily.slice(0, days).map((day) => ({
-      date: new Date(day.dt * 1000).toISOString().split('T')[0]!,
-      tempMin: convertTemperature(day.temp.min, units),
-      tempMax: convertTemperature(day.temp.max, units),
-      humidity: day.humidity,
-      description: day.weather[0]!.description,
-      icon: day.weather[0]!.icon,
+    const forecastDays: ForecastDay[] = aggregated.slice(0, days).map((day) => ({
+      ...day,
+      tempMin: convertTemperature(day.tempMin, units),
+      tempMax: convertTemperature(day.tempMax, units),
     }));
 
     return {
-      locationName: locationName ?? timezoneToLocationName(timezone),
+      locationName: locationName ?? data.city.name,
       units,
       days: forecastDays,
     };
   }
 
   async getAlerts(lat: number, lon: number): Promise<WeatherAlert[]> {
-    const alerts = await this.client.getAlerts(lat, lon);
-    return alerts.map((alert) => ({
-      senderName: alert.sender_name,
-      event: alert.event,
-      start: alert.start,
-      end: alert.end,
-      description: alert.description,
-      tags: alert.tags,
-    }));
+    const data = await this.client.getCurrentWeather(lat, lon);
+    return this.evaluateThresholds(data.main.temp, data.wind.speed, data.main.humidity);
+  }
+
+  private evaluateThresholds(
+    temp: number,
+    windSpeed: number,
+    humidity: number,
+  ): WeatherAlert[] {
+    const alerts: WeatherAlert[] = [];
+
+    if (windSpeed >= this.settings.alertWindSpeedThreshold) {
+      const severity: AlertSeverity =
+        windSpeed >= this.settings.alertWindSpeedThreshold * 1.5 ? 'high' : 'medium';
+      alerts.push({
+        alertType: 'high_wind',
+        message: `Wind speed ${windSpeed} m/s exceeds threshold of ${this.settings.alertWindSpeedThreshold} m/s`,
+        severity,
+        value: windSpeed,
+        threshold: this.settings.alertWindSpeedThreshold,
+      });
+    }
+
+    if (temp >= this.settings.alertTempHighThreshold) {
+      const severity: AlertSeverity =
+        temp >= this.settings.alertTempHighThreshold + 5 ? 'extreme' : 'high';
+      alerts.push({
+        alertType: 'extreme_heat',
+        message: `Temperature ${temp}°C exceeds high threshold of ${this.settings.alertTempHighThreshold}°C`,
+        severity,
+        value: temp,
+        threshold: this.settings.alertTempHighThreshold,
+      });
+    }
+
+    if (temp <= this.settings.alertTempLowThreshold) {
+      const severity: AlertSeverity =
+        temp <= this.settings.alertTempLowThreshold - 10 ? 'extreme' : 'high';
+      alerts.push({
+        alertType: 'extreme_cold',
+        message: `Temperature ${temp}°C below low threshold of ${this.settings.alertTempLowThreshold}°C`,
+        severity,
+        value: temp,
+        threshold: this.settings.alertTempLowThreshold,
+      });
+    }
+
+    if (humidity >= this.settings.alertHumidityThreshold) {
+      alerts.push({
+        alertType: 'high_humidity',
+        message: `Humidity ${humidity}% exceeds threshold of ${this.settings.alertHumidityThreshold}%`,
+        severity: 'low',
+        value: humidity,
+        threshold: this.settings.alertHumidityThreshold,
+      });
+    }
+
+    return alerts;
   }
 }

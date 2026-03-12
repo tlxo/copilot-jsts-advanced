@@ -1,8 +1,20 @@
 const COMPASS_POINTS = [
-  'N', 'NNE', 'NE', 'ENE',
-  'E', 'ESE', 'SE', 'SSE',
-  'S', 'SSW', 'SW', 'WSW',
-  'W', 'WNW', 'NW', 'NNW',
+  'N',
+  'NNE',
+  'NE',
+  'ENE',
+  'E',
+  'ESE',
+  'SE',
+  'SSE',
+  'S',
+  'SSW',
+  'SW',
+  'WSW',
+  'W',
+  'WNW',
+  'NW',
+  'NNW',
 ] as const;
 
 export function celsiusToFahrenheit(celsius: number): number {

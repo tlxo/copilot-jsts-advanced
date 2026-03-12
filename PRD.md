@@ -16,9 +16,9 @@ The implementation must be equally complete and tested before the workshop begin
 
 ## 2. What the Application Does
 
-- Fetches real-time weather data from the [OpenWeatherMap One Call API 3.0](https://openweathermap.org/api/one-call-3) (free tier: 1,000 calls/day)
+- Fetches real-time weather data from the [OpenWeatherMap 2.5 API](https://openweathermap.org/current) (free plan)
 - Manages a collection of saved locations (in-memory, no database)
-- Serves a static HTML/JS dashboard with current weather, 5-day forecast charts (Chart.js), and government weather alerts
+- Serves a static HTML/JS dashboard with current weather, 5-day forecast charts (Chart.js), and custom threshold-based weather alerts
 - Provides a clean REST API with full CRUD for locations and weather queries
 - Provides interactive API docs (Swagger/OpenAPI) at `/docs`
 
@@ -61,7 +61,7 @@ The application uses a strict layered architecture. The implementing agent may c
 |--------|------|-------------|----------|-------------|
 | GET | `/api/weather/current` | `lat` (float, -90..90, required), `lon` (float, -180..180, required), `units` (enum: celsius/fahrenheit/kelvin, default: celsius) | `CurrentWeather` | Current weather for coordinates |
 | GET | `/api/weather/forecast` | `lat`, `lon`, `days` (int, 1..5, default: 5), `units` | `Forecast` | Multi-day daily forecast |
-| GET | `/api/weather/alerts` | `lat`, `lon` | `WeatherAlert[]` | Government weather alerts for coordinates |
+| GET | `/api/weather/alerts` | `lat`, `lon` | `WeatherAlert[]` | Custom threshold-based weather alerts |
 
 ### 4.2 Location Endpoints
 
@@ -95,9 +95,8 @@ These are the data structures used across all layers. Field names in the API JSO
 
 ```
 TemperatureUnit: "celsius" | "fahrenheit" | "kelvin"
+AlertSeverity: "low" | "medium" | "high" | "extreme"
 ```
-
-> **Note:** The `AlertSeverity` enum from the original Python PRD has been removed. The JS/TS implementation uses **government alerts** from the OWM API directly (see §5.4), which do not have a severity field. Alert threshold settings are still present in config (§5.2) as reserved fields for future custom alert support.
 
 #### Coordinates
 ```
@@ -162,15 +161,14 @@ TemperatureUnit: "celsius" | "fahrenheit" | "kelvin"
 }
 ```
 
-#### WeatherAlert (government alerts from OWM)
+#### WeatherAlert (threshold-based custom alerts)
 ```
 {
-  senderName: string,
-  event: string,
-  start: int (unix epoch seconds),
-  end: int (unix epoch seconds),
-  description: string,
-  tags: string[]
+  alertType: string,
+  message: string,
+  severity: AlertSeverity,
+  value: float,
+  threshold: float
 }
 ```
 
@@ -181,20 +179,20 @@ Load from environment variables or `.env` file:
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `OPENWEATHERMAP_API_KEY` | string | `""` | API key (empty string is valid for tests) |
-| `OPENWEATHERMAP_BASE_URL` | string | `https://api.openweathermap.org/data/3.0` | One Call API 3.0 base URL |
+| `OPENWEATHERMAP_BASE_URL` | string | `https://api.openweathermap.org/data/2.5` | OWM 2.5 API base URL (free plan) |
 | `APP_NAME` | string | `"Weather App"` | Application name (used in Swagger docs) |
 | `APP_PORT` | int | `3000` | HTTP server port |
 | `DEBUG` | boolean | `false` | Debug mode |
-| `ALERT_WIND_SPEED_THRESHOLD` | float | `20.0` | m/s — reserved for future custom alerts |
-| `ALERT_TEMP_HIGH_THRESHOLD` | float | `40.0` | °C — reserved for future custom alerts |
-| `ALERT_TEMP_LOW_THRESHOLD` | float | `-20.0` | °C — reserved for future custom alerts |
-| `ALERT_HUMIDITY_THRESHOLD` | float | `90.0` | % — reserved for future custom alerts |
+| `ALERT_WIND_SPEED_THRESHOLD` | float | `20.0` | m/s — wind speed alert threshold |
+| `ALERT_TEMP_HIGH_THRESHOLD` | float | `40.0` | °C — extreme heat threshold |
+| `ALERT_TEMP_LOW_THRESHOLD` | float | `-20.0` | °C — extreme cold threshold |
+| `ALERT_HUMIDITY_THRESHOLD` | float | `90.0` | % — high humidity threshold |
 
-> **Note:** The `ALERT_*` thresholds are not used by the current implementation (which uses government alerts from the OWM API). They are kept in config as reserved settings for a future exercise where participants might add custom threshold-based alerting. The implementation should load them but need not use them.
+> **Note:** The `ALERT_*` thresholds are used by the weather service to generate custom alerts. When current weather values exceed these thresholds, the service returns `WeatherAlert` objects with appropriate severity levels.
 
 ### 5.3 OpenWeatherMap Client
 
-An HTTP client wrapping the **One Call API 3.0** (`/data/3.0/onecall`). This is a single endpoint that returns current weather, daily forecasts, and government alerts — controlled by an `exclude` parameter.
+An HTTP client wrapping the **OWM 2.5 API** (free plan). Uses two endpoints: `/data/2.5/weather` for current weather and `/data/2.5/forecast` for the 5-day/3-hour forecast.
 
 #### Key behaviors
 
@@ -205,27 +203,22 @@ An HTTP client wrapping the **One Call API 3.0** (`/data/3.0/onecall`). This is 
 
 #### Methods
 
-| Method | OWM `exclude` parameter | Returns |
-|--------|------------------------|---------|
-| `getCurrentWeather(lat, lon)` | `minutely,hourly,daily,alerts` | `{ current: OwmCurrentData, timezone: string }` |
-| `getDailyForecast(lat, lon)` | `current,minutely,hourly,alerts` | `{ daily: OwmDailyData[], timezone: string }` |
-| `getAlerts(lat, lon)` | `current,minutely,hourly,daily` | `OwmAlert[]` (empty array if no alerts) |
+| Method | OWM endpoint | Returns |
+|--------|-------------|---------|
+| `getCurrentWeather(lat, lon)` | `/weather` | `OwmCurrentWeatherResponse` (includes `name`, `main`, `wind`, `weather[]`, `dt`) |
+| `getForecast(lat, lon)` | `/forecast` | `OwmForecastResponse` (includes `list[]` of 3-hour intervals and `city.name`) |
 
-All three methods call a shared private function `fetchOneCall(lat, lon, exclude[])` that:
-1. Builds the URL: `{baseUrl}/onecall?lat={lat}&lon={lon}&exclude={csv}&units=metric&appid={key}`
-2. Makes the HTTP request with a 10-second timeout
-3. On **network/timeout error** → throws `WeatherAPIConnectionError`
-4. On **404** → throws `WeatherAPINotFoundError`
-5. On **other non-200** → throws `WeatherAPIError(statusCode, responseBody)`
-6. On success → validates/parses the JSON response and returns it
+Both methods:
+1. Build the URL: `{baseUrl}/{endpoint}?lat={lat}&lon={lon}&units=metric&appid={key}`
+2. Make the HTTP request with a 10-second timeout
+3. On **network/timeout error** → throw `WeatherAPIConnectionError`
+4. On **404** → throw `WeatherAPINotFoundError`
+5. On **other non-200** → throw `WeatherAPIError(statusCode, responseBody)`
+6. On success → validate/parse the JSON response and return it
 
 #### City Name Handling
 
-The One Call API 3.0 does **not** return a city name (unlike the old 2.5 API). Instead, it returns a `timezone` string like `"Europe/London"` or `"America/New_York"`. The service layer extracts a human-readable location name from this:
-- Split on `/`, take the last part, replace underscores with spaces
-- `"Europe/London"` → `"London"`, `"America/New_York"` → `"New York"`
-
-When fetching weather for a saved location, the service passes the location's stored `name` instead of using the timezone fallback.
+The 2.5 API returns a city `name` field directly in the response (unlike the 3.0 API which only returns a timezone). The service uses this name as the default `locationName`. When fetching weather for a saved location, the service passes the location's stored `name` instead.
 
 ### 5.4 Weather Service
 
@@ -233,11 +226,15 @@ Business logic layer. Depends on `OpenWeatherMapClient` and `Settings`.
 
 #### Methods
 
-- **`getCurrentWeather(lat, lon, units, locationName?)`** — Fetches current weather via client. Converts temperatures if `units ≠ celsius`. Uses the optional `locationName` if provided (for saved locations), otherwise falls back to the timezone-derived name.
+- **`getCurrentWeather(lat, lon, units, locationName?)`** — Fetches current weather via client. Converts temperatures if `units ≠ celsius`. Uses the optional `locationName` if provided (for saved locations), otherwise uses the city name from the API response.
 
-- **`getForecast(lat, lon, days, units, locationName?)`** — Fetches daily forecast via client, slices the daily array to the requested number of `days`, converts temperatures. Same `locationName` logic.
+- **`getForecast(lat, lon, days, units, locationName?)`** — Fetches the 3-hour forecast via client, aggregates into daily summaries (group by date, min/max temp, average humidity, most common description/icon), slices to the requested number of `days`, converts temperatures. Same `locationName` logic.
 
-- **`getAlerts(lat, lon)`** — Fetches government alerts via client. Maps OWM's snake_case response fields to the domain's camelCase format. Returns an empty array when no alerts are active.
+- **`getAlerts(lat, lon)`** — Fetches current weather via client. Evaluates configured thresholds against the current conditions and returns `WeatherAlert[]`:
+  - **high_wind**: wind speed ≥ threshold → `medium`; ≥ 1.5× threshold → `high`
+  - **extreme_heat**: temp ≥ high threshold → `high`; ≥ high threshold + 5 → `extreme`
+  - **extreme_cold**: temp ≤ low threshold → `high`; ≤ low threshold − 10 → `extreme`
+  - **high_humidity**: humidity ≥ threshold → `low`
 
 #### Temperature Conversion
 
@@ -324,7 +321,7 @@ The frontend is **vanilla JS + CSS + HTML** — no frameworks, no build step, no
 - Coordinate search form (latitude, longitude, unit selector dropdown)
 - Current weather card (temperature, feels-like, humidity, pressure, wind, description, icon)
 - 5-day forecast line chart (Chart.js — high/low temperature lines)
-- Government weather alerts section (color-coded by alert tags)
+- Custom threshold-based weather alerts section (color-coded by severity)
 - Saved locations sidebar with add (name + coordinates) and delete buttons
 - Click a saved location to load its weather
 
@@ -390,14 +387,10 @@ All factory functions accept partial overrides (options/kwargs) to customize any
 | `makeCurrentWeather()` | Domain-level current weather | 15°C, 72% humidity, London |
 | `makeForecastDay()` | Single forecast day | Tomorrow, 10-18°C, scattered clouds |
 | `makeForecast()` | Multi-day forecast | 3 days, London, celsius |
-| `makeWeatherAlert()` | Single government alert | Wind warning from Met Office |
-| `makeOwmCurrentWeatherData()` | Raw OWM `current` response block | Matches One Call 3.0 `current` schema |
-| `makeOwmDailyData()` | Raw OWM `daily[]` entry | Matches One Call 3.0 `daily` schema |
-| `makeOwmAlert()` | Raw OWM `alerts[]` entry | Matches One Call 3.0 `alerts` schema |
-| `makeOwmOneCallResponse()` | Full OWM One Call response | All sections present |
-| `makeOwmOneCallCurrentOnly()` | OWM response with only `current` | For current weather tests |
-| `makeOwmOneCallForecastOnly()` | OWM response with only `daily` | For forecast tests |
-| `makeOwmOneCallAlertsOnly()` | OWM response with only `alerts` | For alert tests |
+| `makeWeatherAlert()` | Single threshold-based alert | High wind, medium severity |
+| `makeOwmCurrentWeatherResponse()` | Raw OWM 2.5 `/weather` response | Matches 2.5 current weather schema |
+| `makeOwmForecastItem()` | Raw OWM 2.5 `/forecast` list entry | Single 3-hour forecast interval |
+| `makeOwmForecastResponse()` | Full OWM 2.5 `/forecast` response | 3 days of 3-hour intervals |
 
 ### 7.6 Unit Tests — What to Test
 
@@ -406,7 +399,7 @@ All factory functions accept partial overrides (options/kwargs) to customize any
 | Converters | All conversion functions with known input/output pairs, edge cases (0, negative, -40 crossover), rounding to 2 decimals. Parametrized/table-driven. Compass: all 16 directions, boundary values (0°, 11.25°, 348.75°, 360°), negative degrees. |
 | Models/Validation | Valid/invalid inputs, boundary values (-90/90 for lat, -180/180 for lon), enum validation, default values, partial updates (LocationUpdate with all combinations). |
 | Location Repo | CRUD operations: add returns UUID + timestamp, get existing, get non-existent throws, listAll sorted by createdAt, delete existing, delete non-existent throws, update partial fields, update non-existent throws, multiple entries with unique IDs. |
-| Weather Service | Unit conversion for all 3 units (celsius passthrough, fahrenheit, kelvin). Non-temperature fields unchanged after conversion. Forecast day slicing (request 3 of 7 days). Location name from timezone fallback. Location name override parameter. Alert mapping from OWM snake_case to camelCase. Empty alerts when OWM returns none. |
+| Weather Service | Unit conversion for all 3 units (celsius passthrough, fahrenheit, kelvin). Non-temperature fields unchanged after conversion. Forecast daily aggregation from 3-hour intervals. Forecast day slicing (request 3 of 5 days). Location name from API response. Location name override parameter. Threshold-based alerts: no alerts when under thresholds, high_wind at medium/high severity, extreme_heat at high/extreme severity, extreme_cold at high/extreme severity, high_humidity at low severity, multiple alerts when multiple thresholds exceeded. |
 
 ### 7.7 Integration Tests — What to Test
 
@@ -414,7 +407,7 @@ All factory functions accept partial overrides (options/kwargs) to customize any
 |----------|-------|
 | GET /api/weather/current | 200 with valid coords (celsius default), 200 with fahrenheit conversion, 422 for missing params, 422 for invalid lat (out of range), 404 when OWM returns 404, 502 on OWM server error |
 | GET /api/weather/forecast | 200 with forecast data, `days` param limits results, 422 for days out of range (0 or 6), kelvin temperature conversion |
-| GET /api/weather/alerts | 200 with empty alerts (no government alerts active), 200 with multiple government alerts |
+| GET /api/weather/alerts | 200 with empty alerts (no thresholds exceeded), 200 with multiple threshold-based alerts |
 | POST /api/locations | 201 valid creation, 422 invalid lat, 422 empty name, multiple creates produce unique IDs |
 | GET /api/locations | 200 empty list, 200 after creating locations |
 | GET /api/locations/:id | 200 existing, 404 non-existent UUID |
@@ -520,14 +513,14 @@ The project must have standard lifecycle commands. Map these to the target langu
 ### 9.2 `.env.example`
 
 ```env
-# OpenWeatherMap API key — get one at https://openweathermap.org/api/one-call-3
+# OpenWeatherMap API key — get one at https://openweathermap.org/appid
 OPENWEATHERMAP_API_KEY=
-OPENWEATHERMAP_BASE_URL=https://api.openweathermap.org/data/3.0
+OPENWEATHERMAP_BASE_URL=https://api.openweathermap.org/data/2.5
 APP_NAME=Weather App
 APP_PORT=3000
 DEBUG=false
 
-# Alert thresholds (reserved for future custom alert feature)
+# Alert thresholds (used for custom threshold-based alerting)
 ALERT_WIND_SPEED_THRESHOLD=20.0
 ALERT_TEMP_HIGH_THRESHOLD=40.0
 ALERT_TEMP_LOW_THRESHOLD=-20.0
@@ -559,7 +552,7 @@ The README must include:
 - **Do NOT add a database.** The in-memory repository is intentional.
 - **Do NOT add authentication.** The app is for workshop use only.
 - **Do NOT add a build step for the frontend.** It must remain vanilla JS served as static files.
-- **Do NOT implement custom threshold-based alerts.** Use government alerts from the OWM API. Threshold config settings should be loaded but unused (reserved for a future exercise).
+- **Do implement custom threshold-based alerts.** The OWM 2.5 free plan does not include government alerts. Use the `ALERT_*` threshold settings to generate custom alerts from current weather data.
 
 ---
 
@@ -572,8 +565,8 @@ The README must include:
 - [ ] Implement domain error hierarchy
 - [ ] Implement converter utility functions (pure, stateless)
 - [ ] Implement `LocationRepository` (in-memory CRUD with Map)
-- [ ] Implement `OpenWeatherMapClient` (One Call API 3.0, single `fetchOneCall` method)
-- [ ] Implement `WeatherService` (unit conversion, timezone→name fallback, alert mapping)
+- [ ] Implement `OpenWeatherMapClient` (2.5 API: `/weather` + `/forecast` endpoints)
+- [ ] Implement `WeatherService` (unit conversion, forecast aggregation, threshold-based alerts)
 - [ ] Implement weather router/handler (3 GET endpoints)
 - [ ] Implement locations router/handler (6 endpoints including `/:id/weather`)
 - [ ] Implement dependency injection / container wiring
@@ -625,7 +618,7 @@ The exact structure depends on language conventions. Here is a suggested layout:
 | DI Container | `dependencies.*` or `internal/container.*` | Factory for settings → services → app |
 | Weather router | `routers/weather.*` or `internal/handlers/weather.*` | 3 GET endpoints |
 | Locations router | `routers/locations.*` or `internal/handlers/locations.*` | 6 CRUD + weather endpoints |
-| OWM Client | `services/openweathermap.*` | HTTP client for One Call API 3.0 |
+| OWM Client | `services/openweathermap.*` | HTTP client for OWM 2.5 API |
 | Weather Service | `services/weather_service.*` | Business logic |
 | Exceptions/Errors | `services/exceptions.*` or `internal/errors.*` | Domain error types |
 | Location Repo | `repositories/location_repo.*` | In-memory Map CRUD |

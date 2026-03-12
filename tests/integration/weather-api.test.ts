@@ -3,11 +3,7 @@ import request from 'supertest';
 import { createTestApp, createTestSettings } from '../setup.js';
 import { OpenWeatherMapClient } from '../../src/services/openweathermap.js';
 import { WeatherService } from '../../src/services/weather-service.js';
-import {
-  makeOwmCurrentWeatherData,
-  makeOwmDailyData,
-  makeOwmAlert,
-} from '../factories.js';
+import { makeOwmCurrentWeatherResponse, makeOwmForecastItem, makeOwmForecastResponse } from '../factories.js';
 import {
   WeatherAPINotFoundError,
   WeatherAPIConnectionError,
@@ -18,8 +14,7 @@ function createMockedApp() {
   const settings = createTestSettings();
   const mockClient = {
     getCurrentWeather: vi.fn(),
-    getDailyForecast: vi.fn(),
-    getAlerts: vi.fn(),
+    getForecast: vi.fn(),
   } as unknown as OpenWeatherMapClient;
   const weatherService = new WeatherService(mockClient, settings);
 
@@ -29,20 +24,19 @@ function createMockedApp() {
     weatherService,
   });
 
-  return { app, mockClient: mockClient as unknown as {
-    getCurrentWeather: ReturnType<typeof vi.fn>;
-    getDailyForecast: ReturnType<typeof vi.fn>;
-    getAlerts: ReturnType<typeof vi.fn>;
-  }};
+  return {
+    app,
+    mockClient: mockClient as unknown as {
+      getCurrentWeather: ReturnType<typeof vi.fn>;
+      getForecast: ReturnType<typeof vi.fn>;
+    },
+  };
 }
 
 describe('GET /api/weather/current', () => {
   it('returns 200 with valid coordinates', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockResolvedValue({
-      current: makeOwmCurrentWeatherData(),
-      timezone: 'Europe/London',
-    });
+    mockClient.getCurrentWeather.mockResolvedValue(makeOwmCurrentWeatherResponse());
 
     const res = await request(app).get('/api/weather/current?lat=51.51&lon=-0.13');
 
@@ -54,14 +48,11 @@ describe('GET /api/weather/current', () => {
 
   it('returns 200 with fahrenheit units', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockResolvedValue({
-      current: makeOwmCurrentWeatherData({ temp: 0 }),
-      timezone: 'Europe/London',
-    });
-
-    const res = await request(app).get(
-      '/api/weather/current?lat=51.51&lon=-0.13&units=fahrenheit',
+    mockClient.getCurrentWeather.mockResolvedValue(
+      makeOwmCurrentWeatherResponse({ main: { temp: 0, feels_like: 0, pressure: 1013, humidity: 72 } }),
     );
+
+    const res = await request(app).get('/api/weather/current?lat=51.51&lon=-0.13&units=fahrenheit');
 
     expect(res.status).toBe(200);
     expect(res.body.units).toBe('fahrenheit');
@@ -112,13 +103,12 @@ describe('GET /api/weather/current', () => {
 describe('GET /api/weather/forecast', () => {
   it('returns 200 with forecast data', async () => {
     const { app, mockClient } = createMockedApp();
-    const dailyData = Array.from({ length: 5 }, (_, i) =>
-      makeOwmDailyData({ dt: 1718452800 + i * 86400 }),
-    );
-    mockClient.getDailyForecast.mockResolvedValue({
-      daily: dailyData,
-      timezone: 'Europe/London',
-    });
+    const items: ReturnType<typeof makeOwmForecastItem>[] = [];
+    for (let d = 15; d < 20; d++) {
+      items.push(makeOwmForecastItem({ dt_txt: `2025-06-${d} 06:00:00` }));
+      items.push(makeOwmForecastItem({ dt_txt: `2025-06-${d} 12:00:00` }));
+    }
+    mockClient.getForecast.mockResolvedValue(makeOwmForecastResponse({ list: items }));
 
     const res = await request(app).get('/api/weather/forecast?lat=51.51&lon=-0.13');
 
@@ -129,17 +119,13 @@ describe('GET /api/weather/forecast', () => {
 
   it('respects days parameter', async () => {
     const { app, mockClient } = createMockedApp();
-    const dailyData = Array.from({ length: 5 }, (_, i) =>
-      makeOwmDailyData({ dt: 1718452800 + i * 86400 }),
-    );
-    mockClient.getDailyForecast.mockResolvedValue({
-      daily: dailyData,
-      timezone: 'Europe/London',
-    });
+    const items: ReturnType<typeof makeOwmForecastItem>[] = [];
+    for (let d = 15; d < 20; d++) {
+      items.push(makeOwmForecastItem({ dt_txt: `2025-06-${d} 12:00:00` }));
+    }
+    mockClient.getForecast.mockResolvedValue(makeOwmForecastResponse({ list: items }));
 
-    const res = await request(app).get(
-      '/api/weather/forecast?lat=51.51&lon=-0.13&days=2',
-    );
+    const res = await request(app).get('/api/weather/forecast?lat=51.51&lon=-0.13&days=2');
 
     expect(res.status).toBe(200);
     expect(res.body.days).toHaveLength(2);
@@ -147,18 +133,19 @@ describe('GET /api/weather/forecast', () => {
 
   it('returns 422 for days out of range', async () => {
     const { app } = createMockedApp();
-    const res = await request(app).get(
-      '/api/weather/forecast?lat=51.51&lon=-0.13&days=10',
-    );
+    const res = await request(app).get('/api/weather/forecast?lat=51.51&lon=-0.13&days=10');
     expect(res.status).toBe(422);
   });
 
   it('converts forecast to kelvin', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getDailyForecast.mockResolvedValue({
-      daily: [makeOwmDailyData({ temp: { min: 0, max: 0, day: 0, night: 0, eve: 0, morn: 0 } })],
-      timezone: 'Europe/London',
-    });
+    mockClient.getForecast.mockResolvedValue(
+      makeOwmForecastResponse({
+        list: [
+          makeOwmForecastItem({ main: { temp: 0, temp_min: 0, temp_max: 0, humidity: 50 }, dt_txt: '2025-06-15 12:00:00' }),
+        ],
+      }),
+    );
 
     const res = await request(app).get(
       '/api/weather/forecast?lat=51.51&lon=-0.13&days=1&units=kelvin',
@@ -170,9 +157,14 @@ describe('GET /api/weather/forecast', () => {
 });
 
 describe('GET /api/weather/alerts', () => {
-  it('returns 200 with no alerts', async () => {
+  it('returns 200 with no alerts when thresholds not exceeded', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getAlerts.mockResolvedValue([]);
+    mockClient.getCurrentWeather.mockResolvedValue(
+      makeOwmCurrentWeatherResponse({
+        main: { temp: 20, feels_like: 18, pressure: 1013, humidity: 50 },
+        wind: { speed: 5, deg: 180 },
+      }),
+    );
 
     const res = await request(app).get('/api/weather/alerts?lat=51.51&lon=-0.13');
 
@@ -180,19 +172,23 @@ describe('GET /api/weather/alerts', () => {
     expect(res.body).toEqual([]);
   });
 
-  it('returns 200 with alerts', async () => {
+  it('returns 200 with alerts when thresholds exceeded', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getAlerts.mockResolvedValue([
-      makeOwmAlert({ event: 'Heat Advisory' }),
-      makeOwmAlert({ event: 'Flood Warning' }),
-    ]);
+    mockClient.getCurrentWeather.mockResolvedValue(
+      makeOwmCurrentWeatherResponse({
+        main: { temp: 42, feels_like: 44, pressure: 1013, humidity: 95 },
+        wind: { speed: 25, deg: 180 },
+      }),
+    );
 
     const res = await request(app).get('/api/weather/alerts?lat=33.44&lon=-94.04');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
-    expect(res.body[0].event).toBe('Heat Advisory');
-    expect(res.body[1].event).toBe('Flood Warning');
+    expect(res.body).toHaveLength(3);
+    const types = res.body.map((a: { alertType: string }) => a.alertType);
+    expect(types).toContain('high_wind');
+    expect(types).toContain('extreme_heat');
+    expect(types).toContain('high_humidity');
   });
 
   it('returns 422 for missing coordinates', async () => {

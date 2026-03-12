@@ -36,10 +36,7 @@ export function createApp(container: AppContainer): express.Express {
       },
       servers: [{ url: '/' }],
     },
-    apis: [
-      join(__dirname, 'routers', '*.ts'),
-      join(__dirname, 'routers', '*.js'),
-    ],
+    apis: [join(__dirname, 'routers', '*.ts'), join(__dirname, 'routers', '*.js')],
   });
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.get('/openapi.json', (_req: Request, res: Response) => {

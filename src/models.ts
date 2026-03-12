@@ -85,16 +85,18 @@ export interface Forecast {
   days: ForecastDay[];
 }
 
+export const AlertSeverity = z.enum(['low', 'medium', 'high', 'extreme']);
+export type AlertSeverity = z.infer<typeof AlertSeverity>;
+
 export interface WeatherAlert {
-  senderName: string;
-  event: string;
-  start: number;
-  end: number;
-  description: string;
-  tags: string[];
+  alertType: string;
+  message: string;
+  severity: AlertSeverity;
+  value: number;
+  threshold: number;
 }
 
-// ── OWM One Call API 3.0 Response Schemas ──────────────────────────────────────
+// ── OWM 2.5 API Response Schemas ───────────────────────────────────────────────
 
 export const OwmWeatherConditionSchema = z.object({
   id: z.number(),
@@ -103,51 +105,40 @@ export const OwmWeatherConditionSchema = z.object({
   icon: z.string(),
 });
 
-export const OwmCurrentDataSchema = z.object({
-  dt: z.number(),
-  temp: z.number(),
-  feels_like: z.number(),
-  pressure: z.number(),
-  humidity: z.number(),
-  wind_speed: z.number(),
-  wind_deg: z.number(),
+export const OwmCurrentWeatherResponseSchema = z.object({
   weather: z.array(OwmWeatherConditionSchema).min(1),
-});
-export type OwmCurrentData = z.infer<typeof OwmCurrentDataSchema>;
-
-export const OwmDailyTempSchema = z.object({
-  min: z.number(),
-  max: z.number(),
-  day: z.number(),
-  night: z.number(),
-  eve: z.number(),
-  morn: z.number(),
-});
-
-export const OwmDailyDataSchema = z.object({
+  main: z.object({
+    temp: z.number(),
+    feels_like: z.number(),
+    pressure: z.number(),
+    humidity: z.number(),
+  }),
+  wind: z.object({
+    speed: z.number(),
+    deg: z.number(),
+  }),
   dt: z.number(),
-  temp: OwmDailyTempSchema,
-  humidity: z.number(),
+  name: z.string(),
+});
+export type OwmCurrentWeatherResponse = z.infer<typeof OwmCurrentWeatherResponseSchema>;
+
+export const OwmForecastItemSchema = z.object({
+  dt: z.number(),
+  main: z.object({
+    temp: z.number(),
+    temp_min: z.number(),
+    temp_max: z.number(),
+    humidity: z.number(),
+  }),
   weather: z.array(OwmWeatherConditionSchema).min(1),
+  dt_txt: z.string(),
 });
-export type OwmDailyData = z.infer<typeof OwmDailyDataSchema>;
+export type OwmForecastItem = z.infer<typeof OwmForecastItemSchema>;
 
-export const OwmAlertSchema = z.object({
-  sender_name: z.string(),
-  event: z.string(),
-  start: z.number(),
-  end: z.number(),
-  description: z.string(),
-  tags: z.array(z.string()),
+export const OwmForecastResponseSchema = z.object({
+  list: z.array(OwmForecastItemSchema),
+  city: z.object({
+    name: z.string(),
+  }),
 });
-export type OwmAlert = z.infer<typeof OwmAlertSchema>;
-
-export const OwmOneCallResponseSchema = z.object({
-  lat: z.number(),
-  lon: z.number(),
-  timezone: z.string(),
-  current: OwmCurrentDataSchema.optional(),
-  daily: z.array(OwmDailyDataSchema).optional(),
-  alerts: z.array(OwmAlertSchema).optional(),
-});
-export type OwmOneCallResponse = z.infer<typeof OwmOneCallResponseSchema>;
+export type OwmForecastResponse = z.infer<typeof OwmForecastResponseSchema>;

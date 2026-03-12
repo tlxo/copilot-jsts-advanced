@@ -4,15 +4,14 @@ import { createTestApp, createTestSettings } from '../setup.js';
 import { OpenWeatherMapClient } from '../../src/services/openweathermap.js';
 import { WeatherService } from '../../src/services/weather-service.js';
 import { LocationRepository } from '../../src/repositories/location-repo.js';
-import { makeOwmCurrentWeatherData } from '../factories.js';
+import { makeOwmCurrentWeatherResponse } from '../factories.js';
 
 function createMockedApp() {
   const settings = createTestSettings();
   const locationRepository = new LocationRepository();
   const mockClient = {
     getCurrentWeather: vi.fn(),
-    getDailyForecast: vi.fn(),
-    getAlerts: vi.fn(),
+    getForecast: vi.fn(),
   } as unknown as OpenWeatherMapClient;
   const weatherService = new WeatherService(mockClient, settings);
 
@@ -28,8 +27,7 @@ function createMockedApp() {
     locationRepository,
     mockClient: mockClient as unknown as {
       getCurrentWeather: ReturnType<typeof vi.fn>;
-      getDailyForecast: ReturnType<typeof vi.fn>;
-      getAlerts: ReturnType<typeof vi.fn>;
+      getForecast: ReturnType<typeof vi.fn>;
     },
   };
 }
@@ -50,30 +48,22 @@ describe('POST /api/locations', () => {
 
   it('returns 422 for invalid lat', async () => {
     const { app } = createMockedApp();
-    const res = await request(app)
-      .post('/api/locations')
-      .send({ name: 'Bad', lat: 100, lon: 0 });
+    const res = await request(app).post('/api/locations').send({ name: 'Bad', lat: 100, lon: 0 });
 
     expect(res.status).toBe(422);
   });
 
   it('returns 422 for empty name', async () => {
     const { app } = createMockedApp();
-    const res = await request(app)
-      .post('/api/locations')
-      .send({ name: '', lat: 0, lon: 0 });
+    const res = await request(app).post('/api/locations').send({ name: '', lat: 0, lon: 0 });
 
     expect(res.status).toBe(422);
   });
 
   it('creates multiple locations with unique IDs', async () => {
     const { app } = createMockedApp();
-    const res1 = await request(app)
-      .post('/api/locations')
-      .send({ name: 'A', lat: 0, lon: 0 });
-    const res2 = await request(app)
-      .post('/api/locations')
-      .send({ name: 'B', lat: 10, lon: 10 });
+    const res1 = await request(app).post('/api/locations').send({ name: 'A', lat: 0, lon: 0 });
+    const res2 = await request(app).post('/api/locations').send({ name: 'B', lat: 10, lon: 10 });
 
     expect(res1.body.id).not.toBe(res2.body.id);
   });
@@ -91,9 +81,7 @@ describe('GET /api/locations', () => {
   it('returns locations after creating', async () => {
     const { app } = createMockedApp();
 
-    await request(app)
-      .post('/api/locations')
-      .send({ name: 'London', lat: 51.51, lon: -0.13 });
+    await request(app).post('/api/locations').send({ name: 'London', lat: 51.51, lon: -0.13 });
 
     const res = await request(app).get('/api/locations');
 
@@ -118,9 +106,7 @@ describe('GET /api/locations/:id', () => {
 
   it('returns 404 for nonexistent location', async () => {
     const { app } = createMockedApp();
-    const res = await request(app).get(
-      '/api/locations/00000000-0000-0000-0000-000000000000',
-    );
+    const res = await request(app).get('/api/locations/00000000-0000-0000-0000-000000000000');
 
     expect(res.status).toBe(404);
   });
@@ -174,18 +160,14 @@ describe('DELETE /api/locations/:id', () => {
       .post('/api/locations')
       .send({ name: 'ToDelete', lat: 0, lon: 0 });
 
-    const res = await request(app).delete(
-      `/api/locations/${createRes.body.id}`,
-    );
+    const res = await request(app).delete(`/api/locations/${createRes.body.id}`);
 
     expect(res.status).toBe(204);
   });
 
   it('returns 404 for nonexistent location', async () => {
     const { app } = createMockedApp();
-    const res = await request(app).delete(
-      '/api/locations/00000000-0000-0000-0000-000000000000',
-    );
+    const res = await request(app).delete('/api/locations/00000000-0000-0000-0000-000000000000');
 
     expect(res.status).toBe(404);
   });
@@ -198,9 +180,7 @@ describe('DELETE /api/locations/:id', () => {
 
     await request(app).delete(`/api/locations/${createRes.body.id}`);
 
-    const getRes = await request(app).get(
-      `/api/locations/${createRes.body.id}`,
-    );
+    const getRes = await request(app).get(`/api/locations/${createRes.body.id}`);
     expect(getRes.status).toBe(404);
   });
 });
@@ -209,18 +189,13 @@ describe('GET /api/locations/:id/weather', () => {
   it('returns 200 with weather for saved location', async () => {
     const { app, mockClient } = createMockedApp();
 
-    mockClient.getCurrentWeather.mockResolvedValue({
-      current: makeOwmCurrentWeatherData(),
-      timezone: 'Europe/London',
-    });
+    mockClient.getCurrentWeather.mockResolvedValue(makeOwmCurrentWeatherResponse());
 
     const createRes = await request(app)
       .post('/api/locations')
       .send({ name: 'London', lat: 51.51, lon: -0.13 });
 
-    const res = await request(app).get(
-      `/api/locations/${createRes.body.id}/weather`,
-    );
+    const res = await request(app).get(`/api/locations/${createRes.body.id}/weather`);
 
     expect(res.status).toBe(200);
     expect(res.body.locationName).toBe('London');

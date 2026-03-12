@@ -7,9 +7,7 @@ import {
   CurrentWeatherQuerySchema,
 } from '../models.js';
 
-function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-) {
+function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };
@@ -155,7 +153,7 @@ export function createLocationsRouter(container: AppContainer): Router {
       const location = locationRepository.get(req.params['id']!);
       const unitsParam = req.query['units'] as string | undefined;
       const units = unitsParam
-        ? (CurrentWeatherQuerySchema.shape.units.parse(unitsParam))
+        ? CurrentWeatherQuerySchema.shape.units.parse(unitsParam)
         : ('celsius' as const);
       const weather = await weatherService.getCurrentWeather(
         location.coordinates.lat,

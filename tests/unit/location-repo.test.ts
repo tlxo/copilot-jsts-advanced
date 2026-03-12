@@ -97,9 +97,7 @@ describe('LocationRepository', () => {
     });
 
     it('throws LocationNotFoundError for unknown id', () => {
-      expect(() => repo.update('nonexistent', { name: 'X' })).toThrow(
-        LocationNotFoundError,
-      );
+      expect(() => repo.update('nonexistent', { name: 'X' })).toThrow(LocationNotFoundError);
     });
   });
 });

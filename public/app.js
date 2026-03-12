@@ -152,24 +152,25 @@ function renderAlerts(alerts) {
   alertsList.innerHTML = '';
 
   for (const alert of alerts) {
-    const severity = classifyAlertSeverity(alert);
+    const cssClass = severityCssClass(alert.severity);
     const el = document.createElement('div');
-    el.className = `alert alert--${severity}`;
+    el.className = `alert alert--${cssClass}`;
     el.innerHTML = `
-      <div class="alert__title">${escapeHtml(alert.event)}</div>
-      <div class="alert__sender">${escapeHtml(alert.senderName)}</div>
-      <div class="alert__description">${escapeHtml(alert.description)}</div>
+      <div class="alert__title">${escapeHtml(alert.alertType.replace(/_/g, ' '))}</div>
+      <div class="alert__sender">${escapeHtml(alert.severity)}</div>
+      <div class="alert__description">${escapeHtml(alert.message)}</div>
     `;
     alertsList.appendChild(el);
   }
 }
 
-function classifyAlertSeverity(alert) {
-  const event = alert.event.toLowerCase();
-  const tags = (alert.tags || []).map(t => t.toLowerCase());
-  if (event.includes('warning') || tags.includes('extreme')) return 'danger';
-  if (event.includes('watch') || event.includes('advisory')) return 'warning';
-  return 'info';
+function severityCssClass(severity) {
+  switch (severity) {
+    case 'extreme':
+    case 'high': return 'danger';
+    case 'medium': return 'warning';
+    default: return 'info';
+  }
 }
 
 function escapeHtml(text) {

@@ -1,15 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { AppContainer } from '../dependencies.js';
-import {
-  CurrentWeatherQuerySchema,
-  ForecastQuerySchema,
-  AlertsQuerySchema,
-} from '../models.js';
+import { CurrentWeatherQuerySchema, ForecastQuerySchema, AlertsQuerySchema } from '../models.js';
 
-function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
-) {
+function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };
@@ -45,11 +39,7 @@ export function createWeatherRouter(container: AppContainer): Router {
     '/current',
     asyncHandler(async (req: Request, res: Response) => {
       const query = CurrentWeatherQuerySchema.parse(req.query);
-      const weather = await weatherService.getCurrentWeather(
-        query.lat,
-        query.lon,
-        query.units,
-      );
+      const weather = await weatherService.getCurrentWeather(query.lat, query.lon, query.units);
       res.json(weather);
     }),
   );

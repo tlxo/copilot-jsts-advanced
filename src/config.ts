@@ -11,7 +11,10 @@ function loadEnvFile(): void {
     const idx = trimmed.indexOf('=');
     if (idx === -1) continue;
     const key = trimmed.slice(0, idx).trim();
-    const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+    const val = trimmed
+      .slice(idx + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
     process.env[key] ??= val;
   }
 }
@@ -34,7 +37,7 @@ export function loadSettings(): Settings {
   return {
     openWeatherMapApiKey: process.env['OPENWEATHERMAP_API_KEY'] ?? '',
     openWeatherMapBaseUrl:
-      process.env['OPENWEATHERMAP_BASE_URL'] ?? 'https://api.openweathermap.org/data/3.0',
+      process.env['OPENWEATHERMAP_BASE_URL'] ?? 'https://api.openweathermap.org/data/2.5',
     appName: process.env['APP_NAME'] ?? 'Weather App',
     appPort: parseInt(process.env['APP_PORT'] ?? '3000', 10),
     debug: process.env['DEBUG'] === 'true',
