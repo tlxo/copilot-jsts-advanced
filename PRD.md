@@ -632,55 +632,73 @@ The exact structure depends on language conventions. Here is a suggested layout:
 
 ---
 
-## Appendix B: OpenWeatherMap One Call API 3.0 Response Shapes
+## Appendix B: OpenWeatherMap 2.5 API Response Shapes
 
-The client calls `GET /data/3.0/onecall` with an `exclude` parameter to request only the needed sections. The response shape (with all sections included):
+The client uses two separate endpoints. Both use `units=metric` (Celsius, m/s).
+
+### `/data/2.5/weather` — Current Weather
 
 ```json
 {
-  "lat": 51.51,
-  "lon": -0.13,
-  "timezone": "Europe/London",
-  "timezone_offset": 3600,
-  "current": {
-    "dt": 1718452800,
+  "coord": { "lon": -0.13, "lat": 51.51 },
+  "weather": [
+    { "id": 802, "main": "Clouds", "description": "scattered clouds", "icon": "03d" }
+  ],
+  "main": {
     "temp": 15.0,
     "feels_like": 13.5,
+    "temp_min": 13.0,
+    "temp_max": 17.0,
     "pressure": 1013,
-    "humidity": 72,
-    "wind_speed": 5.5,
-    "wind_deg": 220,
-    "weather": [
-      { "id": 802, "main": "Clouds", "description": "scattered clouds", "icon": "03d" }
-    ]
+    "humidity": 72
   },
-  "daily": [
+  "wind": { "speed": 5.5, "deg": 220 },
+  "dt": 1718452800,
+  "name": "London"
+}
+```
+
+### `/data/2.5/forecast` — 5-Day / 3-Hour Forecast
+
+```json
+{
+  "list": [
     {
       "dt": 1718452800,
-      "temp": { "min": 10.0, "max": 18.0, "day": 15.0, "night": 11.0, "eve": 14.0, "morn": 12.0 },
-      "humidity": 65,
+      "main": {
+        "temp": 15.0,
+        "temp_min": 13.0,
+        "temp_max": 17.0,
+        "humidity": 72
+      },
+      "weather": [
+        { "id": 802, "main": "Clouds", "description": "scattered clouds", "icon": "03d" }
+      ],
+      "dt_txt": "2024-06-15 12:00:00"
+    },
+    {
+      "dt": 1718463600,
+      "main": {
+        "temp": 14.0,
+        "temp_min": 12.0,
+        "temp_max": 16.0,
+        "humidity": 75
+      },
       "weather": [
         { "id": 500, "main": "Rain", "description": "light rain", "icon": "10d" }
-      ]
+      ],
+      "dt_txt": "2024-06-15 15:00:00"
     }
   ],
-  "alerts": [
-    {
-      "sender_name": "Met Office",
-      "event": "Yellow Wind Warning",
-      "start": 1718452800,
-      "end": 1718496000,
-      "description": "Strong winds expected across southern England...",
-      "tags": ["Wind"]
-    }
-  ]
+  "city": {
+    "name": "London"
+  }
 }
 ```
 
 ### Key points for parsing and test factories:
 
-- **`current`**: Single object. Temperature fields are floats in Celsius (metric). `weather` is an array but always has at least one entry — use the first.
-- **`daily`**: Array of daily forecasts. `temp` is a nested object with `min`/`max`/`day`/`night`/`eve`/`morn`. Pre-aggregated (no 3-hour interval aggregation needed, unlike API 2.5).
-- **`alerts`**: Array of government weather alerts. May be absent or empty. Fields use snake_case — the service maps to camelCase.
-- **`timezone`**: String like `"Europe/London"`. Used to derive `locationName` when not provided.
-- Sections excluded via the `exclude` parameter will be absent from the response.
+- **`/weather` response**: Top-level `name` field provides the city name directly (no timezone-based lookup needed). `weather` is an array — use the first entry for description/icon. `main` contains temperature, pressure, humidity. `wind` contains speed and direction.
+- **`/forecast` response**: `list` is an array of 3-hour forecast intervals (up to 40 entries covering 5 days). Each entry has `dt_txt` (e.g. `"2024-06-15 12:00:00"`) — the service groups by the date portion to aggregate into daily summaries (min/max temp, average humidity, most common description/icon). `city.name` provides the location name.
+- **No alerts endpoint**: The 2.5 free plan does not include government weather alerts. The service generates custom threshold-based alerts by evaluating current weather values against configured `ALERT_*` thresholds.
+- **Daily aggregation**: Unlike the 3.0 API which provides pre-aggregated daily data, the 2.5 `/forecast` returns 3-hour intervals that must be grouped by date and aggregated in the service layer.
