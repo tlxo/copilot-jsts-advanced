@@ -26,7 +26,7 @@ These exercises are split across two workshops. The weather app codebase is the 
 - [ ] Does the coordinator avoid reading files itself to keep its context window lean?
 - [ ] Have you tested the agent with a concrete task and observed its behavior?
 
-**Getting help:** This repo includes an **Exercise Tutor** agent. Switch to it in the agent picker whenever you need guidance on concepts, design decisions, or debugging. Open separate chat threads for different topics to keep conversations focused -- don't pile everything into one thread.
+**Getting help:** This repo includes a **teacher** agent. Switch to it in the agent picker whenever you need guidance on concepts, design decisions, or debugging. Open separate chat threads for different topics to keep conversations focused -- don't pile everything into one thread.
 
 ---
 
@@ -45,9 +45,9 @@ npm test
 
 All tests should pass. You do not need an OpenWeatherMap API key for the exercises -- tests mock external calls.
 
-Verify that VS Code agent mode is functional: open the Chat view, check that the agent picker shows both built-in agents (Agent, Plan, Ask, Edit) and that you can switch between them.
+Verify that VS Code agent mode is functional: open the Chat view, check that the agent picker shows both built-in agents (Agent, Plan, Ask) and that you can switch between them.
 
-Confirm the **Exercise Tutor** agent is available: open the agent picker and look for it in the list. Switch to it and ask a question to verify it responds. This agent is your workshop coach -- use it throughout the exercises when you need guidance on concepts, design decisions, or debugging.
+Confirm the **teacher** agent is available: open the agent picker and look for it in the list. Switch to it and ask a question to verify it responds. This agent is your workshop coach -- use it throughout the exercises when you need guidance on concepts, design decisions, or debugging.
 
 Create the directories you will use:
 
@@ -79,7 +79,7 @@ A custom agent is a Markdown file with YAML frontmatter that defines the agent's
 - Switch to the PM agent and ask it to assess the project and identify improvement areas.
 - Ask it to plan a feature it identifies as a good candidate.
 - Ask it to review one of its own backlog items for completeness and proper sizing -- are they small enough for an agent to implement in one session?
-- If you're unsure about any design decision, switch to the **Exercise Tutor** agent in a separate thread and ask.
+- If you're unsure about any design decision, switch to the **teacher** agent in a separate thread and ask.
 
 **Discussion points:**
 - How specific should the instructions be vs. how much should you rely on the model's judgment?
@@ -131,7 +131,7 @@ What other deterministic capabilities would help a PM agent? Consider things lik
 - To nudge the agent toward using a skill, reference it explicitly in the agent's instructions (e.g., "When assessing the project, use the `<skill-name>` skill to gather metrics").
 
 **Discussion points:**
-- What makes a good boundary between "instruction for the agent" and "script that runs deterministically"? (Ask the **Exercise Tutor** if you want to think this through.)
+- What makes a good boundary between "instruction for the agent" and "script that runs deterministically"? (Ask the **teacher** agent if you want to think this through.)
 - How do you ensure the agent actually uses the skill vs. trying to do it in its own way?
 - Which of these skills would be useful beyond the PM agent?
 
@@ -258,7 +258,7 @@ Think about what guarantees the Implementer needs:
 - How much manual coordination did you have to do between the PM step and the Implementer step? (Copy-pasting plans, switching chat threads, re-explaining context...)
 - **That manual coordination is exactly what orchestration automates in Workshop 2.**
 
-**Iterate:** If skills didn't fire or hooks misbehaved, go back and fix them. Use the **Exercise Tutor** in a separate thread for debugging.
+**Iterate:** If skills didn't fire or hooks misbehaved, go back and fix them. Use the **teacher** agent in a separate thread for debugging.
 
 ---
 
@@ -293,7 +293,7 @@ Remember Exercise 4? The manual coordination you did there -- switching between 
 
 ### 5a: Design the Orchestration
 
-Before writing any new agent files, design the workflow as a group. The **Exercise Tutor** can help -- open a separate thread. See [how subagent execution works](https://code.visualstudio.com/docs/copilot/agents/subagents#_how-subagent-execution-works).
+Before writing any new agent files, design the workflow as a group. The **teacher** agent can help -- open a separate thread. See [how subagent execution works](https://code.visualstudio.com/docs/copilot/agents/subagents#_how-subagent-execution-works).
 
 **What you already have** from Workshop 1: PM agent (with `create-backlog-item` skill), Implementer agent (with `run-tests` skill and post-edit linting), Smart Gatekeeper hook, PM audit hook.
 
@@ -360,7 +360,7 @@ Before running a full feature through the workflow, do a dry run. Give the Coord
 - Did hooks fire as expected? The Smart Gatekeeper should still protect terminal commands in subagent sessions. The post-edit linting hook should still run after the Implementer edits files.
 - What context did the subagent actually receive? Is the I/O contract being followed?
 
-**Practical tip:** Use separate chat threads for different concerns -- one for running the agent, one for tweaking definitions, one for asking the **Exercise Tutor** about debugging strategies. Changes to `.agent.md` files take effect in new threads, not the currently running one.
+**Practical tip:** Use separate chat threads for different concerns -- one for running the agent, one for tweaking definitions, one for asking the **teacher** agent about debugging strategies. Changes to `.agent.md` files take effect in new threads, not the currently running one.
 
 ### 5d: Run a Feature Through It
 
