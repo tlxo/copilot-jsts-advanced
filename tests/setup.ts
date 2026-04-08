@@ -15,7 +15,7 @@ process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
 export function createTestSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     openWeatherMapApiKey: 'test-api-key',
-    openWeatherMapBaseUrl: 'https://api.openweathermap.org/data/2.5',
+    openWeatherMapBaseUrl: 'https://api.openweathermap.org/data/3.0',
     appName: 'Weather App Test',
     appPort: 0,
     debug: false,

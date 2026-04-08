@@ -7,14 +7,12 @@ import { makeOwmOneCallCurrentOnly, makeOwmOneCallResponse, makeOwmOneCallDailyI
 describe('WeatherService', () => {
   let service: WeatherService;
   let mockClient: {
-    getCurrentWeather: ReturnType<typeof vi.fn>;
-    getForecast: ReturnType<typeof vi.fn>;
+    getOneCall: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     mockClient = {
-      getCurrentWeather: vi.fn(),
-      getForecast: vi.fn(),
+      getOneCall: vi.fn(),
     };
     const settings = createTestSettings();
     service = new WeatherService(mockClient as unknown as OpenWeatherMapClient, settings);
@@ -22,7 +20,7 @@ describe('WeatherService', () => {
 
   describe('getCurrentWeather', () => {
     it('returns current weather in celsius (default)', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 15.0, feels_like: 13.5, pressure: 1013, humidity: 72 }),
       );
 
@@ -35,7 +33,7 @@ describe('WeatherService', () => {
     });
 
     it('converts to fahrenheit', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 0, feels_like: -5, pressure: 1013, humidity: 72 }),
       );
 
@@ -47,7 +45,7 @@ describe('WeatherService', () => {
     });
 
     it('converts to kelvin', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 0, feels_like: 0, pressure: 1013, humidity: 72 }),
       );
 
@@ -58,7 +56,7 @@ describe('WeatherService', () => {
     });
 
     it('preserves non-temperature fields unchanged', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 15, feels_like: 13, pressure: 1020, humidity: 85, wind_speed: 7.0, wind_deg: 180 }),
       );
 
@@ -71,7 +69,7 @@ describe('WeatherService', () => {
     });
 
     it('uses provided locationName over API timezone', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(makeOwmOneCallCurrentOnly());
+      mockClient.getOneCall.mockResolvedValue(makeOwmOneCallCurrentOnly());
 
       const result = await service.getCurrentWeather(51.51, -0.13, 'celsius', 'My Custom Name');
 
@@ -79,7 +77,7 @@ describe('WeatherService', () => {
     });
 
     it('uses timezone from API response as location name fallback', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallResponse({ timezone: 'America/New_York', current: makeOwmCurrentWeatherData() }),
       );
 
@@ -91,7 +89,7 @@ describe('WeatherService', () => {
 
   describe('getForecast', () => {
     it('returns forecast in celsius', async () => {
-      mockClient.getForecast.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallResponse({
           daily: [
             makeOwmOneCallDailyItem({ temp: { min: 10, max: 22 }, humidity: 58, dt: 1718409600 }),
@@ -110,7 +108,7 @@ describe('WeatherService', () => {
     });
 
     it('converts forecast temperatures to fahrenheit', async () => {
-      mockClient.getForecast.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallResponse({
           daily: [
             makeOwmOneCallDailyItem({ temp: { min: 0, max: 100 }, humidity: 50 }),
@@ -128,7 +126,7 @@ describe('WeatherService', () => {
       const items = Array.from({ length: 5 }, (_, i) =>
         makeOwmOneCallDailyItem({ dt: 1718409600 + i * 86400 }),
       );
-      mockClient.getForecast.mockResolvedValue(makeOwmOneCallResponse({ daily: items }));
+      mockClient.getOneCall.mockResolvedValue(makeOwmOneCallResponse({ daily: items }));
 
       const result = await service.getForecast(51.51, -0.13, 3);
 
@@ -136,7 +134,7 @@ describe('WeatherService', () => {
     });
 
     it('converts forecast temperatures to kelvin', async () => {
-      mockClient.getForecast.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallResponse({
           daily: [
             makeOwmOneCallDailyItem({ temp: { min: 0, max: 0 }, humidity: 50 }),
@@ -153,7 +151,7 @@ describe('WeatherService', () => {
 
   describe('getAlerts', () => {
     it('returns empty array when no thresholds exceeded', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 20, feels_like: 18, pressure: 1013, humidity: 50, wind_speed: 5, wind_deg: 180 }),
       );
 
@@ -163,7 +161,7 @@ describe('WeatherService', () => {
     });
 
     it('returns high wind alert when wind exceeds threshold', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 20, feels_like: 18, pressure: 1013, humidity: 50, wind_speed: 25, wind_deg: 180 }),
       );
 
@@ -177,7 +175,7 @@ describe('WeatherService', () => {
     });
 
     it('returns high severity for very high wind', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 20, feels_like: 18, pressure: 1013, humidity: 50, wind_speed: 35, wind_deg: 180 }),
       );
 
@@ -189,7 +187,7 @@ describe('WeatherService', () => {
     });
 
     it('returns extreme heat alert', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 42, feels_like: 44, pressure: 1013, humidity: 50, wind_speed: 5, wind_deg: 180 }),
       );
 
@@ -201,7 +199,7 @@ describe('WeatherService', () => {
     });
 
     it('returns extreme severity for very high temperature', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 46, feels_like: 48, pressure: 1013, humidity: 50, wind_speed: 5, wind_deg: 180 }),
       );
 
@@ -213,7 +211,7 @@ describe('WeatherService', () => {
     });
 
     it('returns extreme cold alert', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: -22, feels_like: -28, pressure: 1013, humidity: 50, wind_speed: 5, wind_deg: 180 }),
       );
 
@@ -225,7 +223,7 @@ describe('WeatherService', () => {
     });
 
     it('returns extreme severity for very low temperature', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: -35, feels_like: -40, pressure: 1013, humidity: 50, wind_speed: 5, wind_deg: 180 }),
       );
 
@@ -237,7 +235,7 @@ describe('WeatherService', () => {
     });
 
     it('returns high humidity alert', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 20, feels_like: 18, pressure: 1013, humidity: 95, wind_speed: 5, wind_deg: 180 }),
       );
 
@@ -249,7 +247,7 @@ describe('WeatherService', () => {
     });
 
     it('returns multiple alerts when multiple thresholds exceeded', async () => {
-      mockClient.getCurrentWeather.mockResolvedValue(
+      mockClient.getOneCall.mockResolvedValue(
         makeOwmOneCallCurrentOnly({ temp: 42, feels_like: 44, pressure: 1013, humidity: 95, wind_speed: 25, wind_deg: 180 }),
       );
 

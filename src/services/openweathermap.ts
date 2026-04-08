@@ -10,21 +10,11 @@ import {
 export class OpenWeatherMapClient {
   constructor(private settings: Settings) {}
 
-  async getCurrentWeather(lat: number, lon: number): Promise<OwmOneCallResponse> {
-    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/weather`);
+  async getOneCall(lat: number, lon: number, exclude: string): Promise<OwmOneCallResponse> {
+    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/onecall`);
     url.searchParams.set('lat', lat.toString());
     url.searchParams.set('lon', lon.toString());
-    url.searchParams.set('units', 'metric');
-    url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
-
-    const json = await this.fetchApi(url);
-    return OwmOneCallResponseSchema.parse(json);
-  }
-
-  async getForecast(lat: number, lon: number): Promise<OwmOneCallResponse> {
-    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/forecast`);
-    url.searchParams.set('lat', lat.toString());
-    url.searchParams.set('lon', lon.toString());
+    url.searchParams.set('exclude', exclude);
     url.searchParams.set('units', 'metric');
     url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
 
@@ -47,6 +37,9 @@ export class OpenWeatherMapClient {
       );
     }
 
+    if (response.status === 401) {
+      throw new WeatherAPIError(401, 'Invalid API key');
+    }
     if (response.status === 404) {
       throw new WeatherAPINotFoundError();
     }
@@ -55,6 +48,12 @@ export class OpenWeatherMapClient {
       throw new WeatherAPIError(response.status, body);
     }
 
-    return response.json();
+    let json: unknown;
+    try {
+      json = await response.json();
+    } catch {
+      throw new WeatherAPIError(502, 'Malformed JSON response from weather API');
+    }
+    return json;
   }
 }
