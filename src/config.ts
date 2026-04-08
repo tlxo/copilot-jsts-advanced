@@ -37,7 +37,7 @@ export function loadSettings(): Settings {
   return {
     openWeatherMapApiKey: process.env['OPENWEATHERMAP_API_KEY'] ?? '',
     openWeatherMapBaseUrl:
-      process.env['OPENWEATHERMAP_BASE_URL'] ?? 'https://api.openweathermap.org/data/2.5',
+      process.env['OPENWEATHERMAP_BASE_URL'] ?? 'https://api.openweathermap.org/data/3.0',
     appName: process.env['APP_NAME'] ?? 'Weather App',
     appPort: parseInt(process.env['APP_PORT'] ?? '3000', 10),
     debug: process.env['DEBUG'] === 'true',

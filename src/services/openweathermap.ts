@@ -1,6 +1,6 @@
 import type { Settings } from '../config.js';
-import type { OwmCurrentWeatherResponse, OwmForecastResponse } from '../models.js';
-import { OwmCurrentWeatherResponseSchema, OwmForecastResponseSchema } from '../models.js';
+import type { OwmOneCallResponse } from '../models.js';
+import { OwmOneCallResponseSchema } from '../models.js';
 import {
   WeatherAPIError,
   WeatherAPINotFoundError,
@@ -10,26 +10,16 @@ import {
 export class OpenWeatherMapClient {
   constructor(private settings: Settings) {}
 
-  async getCurrentWeather(lat: number, lon: number): Promise<OwmCurrentWeatherResponse> {
-    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/weather`);
+  async getOneCall(lat: number, lon: number, exclude: string): Promise<OwmOneCallResponse> {
+    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/onecall`);
     url.searchParams.set('lat', lat.toString());
     url.searchParams.set('lon', lon.toString());
     url.searchParams.set('units', 'metric');
+    url.searchParams.set('exclude', exclude);
     url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
 
     const json = await this.fetchApi(url);
-    return OwmCurrentWeatherResponseSchema.parse(json);
-  }
-
-  async getForecast(lat: number, lon: number): Promise<OwmForecastResponse> {
-    const url = new URL(`${this.settings.openWeatherMapBaseUrl}/forecast`);
-    url.searchParams.set('lat', lat.toString());
-    url.searchParams.set('lon', lon.toString());
-    url.searchParams.set('units', 'metric');
-    url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
-
-    const json = await this.fetchApi(url);
-    return OwmForecastResponseSchema.parse(json);
+    return OwmOneCallResponseSchema.parse(json);
   }
 
   private async fetchApi(url: URL): Promise<unknown> {
@@ -47,6 +37,9 @@ export class OpenWeatherMapClient {
       );
     }
 
+    if (response.status === 401) {
+      throw new WeatherAPIError(401, 'Invalid API key');
+    }
     if (response.status === 404) {
       throw new WeatherAPINotFoundError();
     }

@@ -4,14 +4,13 @@ import { createTestApp, createTestSettings } from '../setup.js';
 import { OpenWeatherMapClient } from '../../src/services/openweathermap.js';
 import { WeatherService } from '../../src/services/weather-service.js';
 import { LocationRepository } from '../../src/repositories/location-repo.js';
-import { makeOwmCurrentWeatherResponse } from '../factories.js';
+import { makeOwmOneCallCurrentOnly } from '../factories.js';
 
 function createMockedApp() {
   const settings = createTestSettings();
   const locationRepository = new LocationRepository();
   const mockClient = {
-    getCurrentWeather: vi.fn(),
-    getForecast: vi.fn(),
+    getOneCall: vi.fn(),
   } as unknown as OpenWeatherMapClient;
   const weatherService = new WeatherService(mockClient, settings);
 
@@ -26,8 +25,7 @@ function createMockedApp() {
     app,
     locationRepository,
     mockClient: mockClient as unknown as {
-      getCurrentWeather: ReturnType<typeof vi.fn>;
-      getForecast: ReturnType<typeof vi.fn>;
+      getOneCall: ReturnType<typeof vi.fn>;
     },
   };
 }
@@ -189,7 +187,7 @@ describe('GET /api/locations/:id/weather', () => {
   it('returns 200 with weather for saved location', async () => {
     const { app, mockClient } = createMockedApp();
 
-    mockClient.getCurrentWeather.mockResolvedValue(makeOwmCurrentWeatherResponse());
+    mockClient.getOneCall.mockResolvedValue(makeOwmOneCallCurrentOnly());
 
     const createRes = await request(app)
       .post('/api/locations')

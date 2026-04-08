@@ -6,7 +6,7 @@ import type {
   TemperatureUnit,
   WeatherAlert,
   AlertSeverity,
-  OwmForecastItem,
+  OwmOneCallDailyItem,
 } from '../models.js';
 import { celsiusToFahrenheit, celsiusToKelvin } from '../utils/converters.js';
 import type { OpenWeatherMapClient } from './openweathermap.js';
@@ -23,47 +23,15 @@ function convertTemperature(celsius: number, units: TemperatureUnit): number {
   }
 }
 
-function mostCommon<T>(items: T[]): T {
-  const counts = new Map<T, number>();
-  for (const item of items) {
-    counts.set(item, (counts.get(item) ?? 0) + 1);
-  }
-  let best = items[0]!;
-  let bestCount = 0;
-  for (const [item, count] of counts) {
-    if (count > bestCount) {
-      best = item;
-      bestCount = count;
-    }
-  }
-  return best;
-}
-
-function aggregateForecastByDay(items: OwmForecastItem[]): ForecastDay[] {
-  const grouped = new Map<string, OwmForecastItem[]>();
-  for (const item of items) {
-    const date = item.dt_txt.split(' ')[0]!;
-    const group = grouped.get(date);
-    if (group) {
-      group.push(item);
-    } else {
-      grouped.set(date, [item]);
-    }
-  }
-
-  const days: ForecastDay[] = [];
-  for (const [date, group] of grouped) {
-    days.push({
-      date,
-      tempMin: Math.min(...group.map((i) => i.main.temp_min)),
-      tempMax: Math.max(...group.map((i) => i.main.temp_max)),
-      humidity: Math.round(group.reduce((sum, i) => sum + i.main.humidity, 0) / group.length),
-      description: mostCommon(group.map((i) => i.weather[0]!.description)),
-      icon: mostCommon(group.map((i) => i.weather[0]!.icon)),
-    });
-  }
-
-  return days;
+function buildForecastDay(item: OwmOneCallDailyItem, units: TemperatureUnit): ForecastDay {
+  return {
+    date: new Date(item.dt * 1000).toISOString().split('T')[0]!,
+    tempMin: convertTemperature(item.temp.min, units),
+    tempMax: convertTemperature(item.temp.max, units),
+    humidity: item.humidity,
+    description: item.weather[0]!.description,
+    icon: item.weather[0]!.icon,
+  };
 }
 
 export class WeatherService {
@@ -78,19 +46,20 @@ export class WeatherService {
     units: TemperatureUnit = 'celsius',
     locationName?: string,
   ): Promise<CurrentWeather> {
-    const data = await this.client.getCurrentWeather(lat, lon);
+    const data = await this.client.getOneCall(lat, lon, 'minutely,hourly,daily,alerts');
+    const current = data.current!;
 
     return {
-      temperature: convertTemperature(data.main.temp, units),
-      feelsLike: convertTemperature(data.main.feels_like, units),
-      humidity: data.main.humidity,
-      pressure: data.main.pressure,
-      windSpeed: data.wind.speed,
-      windDirection: data.wind.deg,
-      description: data.weather[0]!.description,
-      icon: data.weather[0]!.icon,
-      timestamp: data.dt,
-      locationName: locationName ?? data.name,
+      temperature: convertTemperature(current.temp, units),
+      feelsLike: convertTemperature(current.feels_like, units),
+      humidity: current.humidity,
+      pressure: current.pressure,
+      windSpeed: current.wind_speed,
+      windDirection: current.wind_deg,
+      description: current.weather[0]!.description,
+      icon: current.weather[0]!.icon,
+      timestamp: current.dt,
+      locationName: locationName ?? data.timezone,
       units,
     };
   }
@@ -102,25 +71,20 @@ export class WeatherService {
     units: TemperatureUnit = 'celsius',
     locationName?: string,
   ): Promise<Forecast> {
-    const data = await this.client.getForecast(lat, lon);
-    const aggregated = aggregateForecastByDay(data.list);
-
-    const forecastDays: ForecastDay[] = aggregated.slice(0, days).map((day) => ({
-      ...day,
-      tempMin: convertTemperature(day.tempMin, units),
-      tempMax: convertTemperature(day.tempMax, units),
-    }));
+    const data = await this.client.getOneCall(lat, lon, 'current,minutely,hourly,alerts');
+    const dailyItems = data.daily ?? [];
 
     return {
-      locationName: locationName ?? data.city.name,
+      locationName: locationName ?? data.timezone,
       units,
-      days: forecastDays,
+      days: dailyItems.slice(0, days).map((item) => buildForecastDay(item, units)),
     };
   }
 
   async getAlerts(lat: number, lon: number): Promise<WeatherAlert[]> {
-    const data = await this.client.getCurrentWeather(lat, lon);
-    return this.evaluateThresholds(data.main.temp, data.wind.speed, data.main.humidity);
+    const data = await this.client.getOneCall(lat, lon, 'minutely,hourly,daily,alerts');
+    const current = data.current!;
+    return this.evaluateThresholds(current.temp, current.wind_speed, current.humidity);
   }
 
   private evaluateThresholds(

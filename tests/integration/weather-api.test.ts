@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createTestApp, createTestSettings } from '../setup.js';
 import { OpenWeatherMapClient } from '../../src/services/openweathermap.js';
 import { WeatherService } from '../../src/services/weather-service.js';
-import { makeOwmCurrentWeatherResponse, makeOwmForecastItem, makeOwmForecastResponse } from '../factories.js';
+import { makeOwmOneCallCurrentOnly, makeOwmOneCallResponse, makeOwmOneCallDailyItem } from '../factories.js';
 import {
   WeatherAPINotFoundError,
   WeatherAPIConnectionError,
@@ -13,8 +13,7 @@ import {
 function createMockedApp() {
   const settings = createTestSettings();
   const mockClient = {
-    getCurrentWeather: vi.fn(),
-    getForecast: vi.fn(),
+    getOneCall: vi.fn(),
   } as unknown as OpenWeatherMapClient;
   const weatherService = new WeatherService(mockClient, settings);
 
@@ -27,8 +26,7 @@ function createMockedApp() {
   return {
     app,
     mockClient: mockClient as unknown as {
-      getCurrentWeather: ReturnType<typeof vi.fn>;
-      getForecast: ReturnType<typeof vi.fn>;
+      getOneCall: ReturnType<typeof vi.fn>;
     },
   };
 }
@@ -36,20 +34,20 @@ function createMockedApp() {
 describe('GET /api/weather/current', () => {
   it('returns 200 with valid coordinates', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockResolvedValue(makeOwmCurrentWeatherResponse());
+    mockClient.getOneCall.mockResolvedValue(makeOwmOneCallCurrentOnly());
 
     const res = await request(app).get('/api/weather/current?lat=51.51&lon=-0.13');
 
     expect(res.status).toBe(200);
     expect(res.body.temperature).toBe(15.0);
-    expect(res.body.locationName).toBe('London');
+    expect(res.body.locationName).toBe('Europe/London');
     expect(res.body.units).toBe('celsius');
   });
 
   it('returns 200 with fahrenheit units', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockResolvedValue(
-      makeOwmCurrentWeatherResponse({ main: { temp: 0, feels_like: 0, pressure: 1013, humidity: 72 } }),
+    mockClient.getOneCall.mockResolvedValue(
+      makeOwmOneCallCurrentOnly({ temp: 0, feels_like: 0, pressure: 1013, humidity: 72 }),
     );
 
     const res = await request(app).get('/api/weather/current?lat=51.51&lon=-0.13&units=fahrenheit');
@@ -73,7 +71,7 @@ describe('GET /api/weather/current', () => {
 
   it('returns 404 when OWM returns 404', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockRejectedValue(new WeatherAPINotFoundError());
+    mockClient.getOneCall.mockRejectedValue(new WeatherAPINotFoundError());
 
     const res = await request(app).get('/api/weather/current?lat=51.51&lon=-0.13');
     expect(res.status).toBe(404);
@@ -81,7 +79,7 @@ describe('GET /api/weather/current', () => {
 
   it('returns 502 on OWM server error', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockRejectedValue(
+    mockClient.getOneCall.mockRejectedValue(
       new WeatherAPIError(500, 'Internal Server Error'),
     );
 
@@ -91,7 +89,7 @@ describe('GET /api/weather/current', () => {
 
   it('returns 503 on connection error', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockRejectedValue(
+    mockClient.getOneCall.mockRejectedValue(
       new WeatherAPIConnectionError('Connection refused'),
     );
 
@@ -103,27 +101,24 @@ describe('GET /api/weather/current', () => {
 describe('GET /api/weather/forecast', () => {
   it('returns 200 with forecast data', async () => {
     const { app, mockClient } = createMockedApp();
-    const items: ReturnType<typeof makeOwmForecastItem>[] = [];
-    for (let d = 15; d < 20; d++) {
-      items.push(makeOwmForecastItem({ dt_txt: `2025-06-${d} 06:00:00` }));
-      items.push(makeOwmForecastItem({ dt_txt: `2025-06-${d} 12:00:00` }));
-    }
-    mockClient.getForecast.mockResolvedValue(makeOwmForecastResponse({ list: items }));
+    const dailyItems = [1, 2, 3, 4, 5].map((i) =>
+      makeOwmOneCallDailyItem({ dt: 1718755200 + i * 86400 }),
+    );
+    mockClient.getOneCall.mockResolvedValue(makeOwmOneCallResponse({ daily: dailyItems }));
 
     const res = await request(app).get('/api/weather/forecast?lat=51.51&lon=-0.13');
 
     expect(res.status).toBe(200);
     expect(res.body.days).toHaveLength(5);
-    expect(res.body.locationName).toBe('London');
+    expect(res.body.locationName).toBe('Europe/London');
   });
 
   it('respects days parameter', async () => {
     const { app, mockClient } = createMockedApp();
-    const items: ReturnType<typeof makeOwmForecastItem>[] = [];
-    for (let d = 15; d < 20; d++) {
-      items.push(makeOwmForecastItem({ dt_txt: `2025-06-${d} 12:00:00` }));
-    }
-    mockClient.getForecast.mockResolvedValue(makeOwmForecastResponse({ list: items }));
+    const dailyItems = [1, 2, 3, 4, 5].map((i) =>
+      makeOwmOneCallDailyItem({ dt: 1718755200 + i * 86400 }),
+    );
+    mockClient.getOneCall.mockResolvedValue(makeOwmOneCallResponse({ daily: dailyItems }));
 
     const res = await request(app).get('/api/weather/forecast?lat=51.51&lon=-0.13&days=2');
 
@@ -139,11 +134,9 @@ describe('GET /api/weather/forecast', () => {
 
   it('converts forecast to kelvin', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getForecast.mockResolvedValue(
-      makeOwmForecastResponse({
-        list: [
-          makeOwmForecastItem({ main: { temp: 0, temp_min: 0, temp_max: 0, humidity: 50 }, dt_txt: '2025-06-15 12:00:00' }),
-        ],
+    mockClient.getOneCall.mockResolvedValue(
+      makeOwmOneCallResponse({
+        daily: [makeOwmOneCallDailyItem({ temp: { min: 0, max: 0 }, humidity: 50 })],
       }),
     );
 
@@ -159,10 +152,14 @@ describe('GET /api/weather/forecast', () => {
 describe('GET /api/weather/alerts', () => {
   it('returns 200 with no alerts when thresholds not exceeded', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockResolvedValue(
-      makeOwmCurrentWeatherResponse({
-        main: { temp: 20, feels_like: 18, pressure: 1013, humidity: 50 },
-        wind: { speed: 5, deg: 180 },
+    mockClient.getOneCall.mockResolvedValue(
+      makeOwmOneCallCurrentOnly({
+        temp: 20,
+        feels_like: 18,
+        pressure: 1013,
+        humidity: 50,
+        wind_speed: 5,
+        wind_deg: 180,
       }),
     );
 
@@ -174,10 +171,14 @@ describe('GET /api/weather/alerts', () => {
 
   it('returns 200 with alerts when thresholds exceeded', async () => {
     const { app, mockClient } = createMockedApp();
-    mockClient.getCurrentWeather.mockResolvedValue(
-      makeOwmCurrentWeatherResponse({
-        main: { temp: 42, feels_like: 44, pressure: 1013, humidity: 95 },
-        wind: { speed: 25, deg: 180 },
+    mockClient.getOneCall.mockResolvedValue(
+      makeOwmOneCallCurrentOnly({
+        temp: 42,
+        feels_like: 44,
+        pressure: 1013,
+        humidity: 95,
+        wind_speed: 25,
+        wind_deg: 180,
       }),
     );
 

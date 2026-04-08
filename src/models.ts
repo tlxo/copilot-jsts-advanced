@@ -96,7 +96,7 @@ export interface WeatherAlert {
   threshold: number;
 }
 
-// ── OWM 2.5 API Response Schemas ───────────────────────────────────────────────
+// ── OWM One Call API 3.0 Response Schemas ─────────────────────────────────────
 
 export const OwmWeatherConditionSchema = z.object({
   id: z.number(),
@@ -105,40 +105,44 @@ export const OwmWeatherConditionSchema = z.object({
   icon: z.string(),
 });
 
-export const OwmCurrentWeatherResponseSchema = z.object({
-  weather: z.array(OwmWeatherConditionSchema).min(1),
-  main: z.object({
-    temp: z.number(),
-    feels_like: z.number(),
-    pressure: z.number(),
-    humidity: z.number(),
-  }),
-  wind: z.object({
-    speed: z.number(),
-    deg: z.number(),
-  }),
+export const OwmOneCallCurrentSchema = z.object({
   dt: z.number(),
-  name: z.string(),
-});
-export type OwmCurrentWeatherResponse = z.infer<typeof OwmCurrentWeatherResponseSchema>;
-
-export const OwmForecastItemSchema = z.object({
-  dt: z.number(),
-  main: z.object({
-    temp: z.number(),
-    temp_min: z.number(),
-    temp_max: z.number(),
-    humidity: z.number(),
-  }),
+  temp: z.number(),
+  feels_like: z.number(),
+  pressure: z.number(),
+  humidity: z.number(),
+  wind_speed: z.number(),
+  wind_deg: z.number(),
   weather: z.array(OwmWeatherConditionSchema).min(1),
-  dt_txt: z.string(),
 });
-export type OwmForecastItem = z.infer<typeof OwmForecastItemSchema>;
+export type OwmOneCallCurrent = z.infer<typeof OwmOneCallCurrentSchema>;
 
-export const OwmForecastResponseSchema = z.object({
-  list: z.array(OwmForecastItemSchema),
-  city: z.object({
-    name: z.string(),
+export const OwmOneCallDailyItemSchema = z.object({
+  dt: z.number(),
+  temp: z.object({
+    min: z.number(),
+    max: z.number(),
   }),
+  humidity: z.number(),
+  weather: z.array(OwmWeatherConditionSchema).min(1),
 });
-export type OwmForecastResponse = z.infer<typeof OwmForecastResponseSchema>;
+export type OwmOneCallDailyItem = z.infer<typeof OwmOneCallDailyItemSchema>;
+
+export const OwmOneCallResponseSchema = z.object({
+  timezone: z.string(),
+  current: OwmOneCallCurrentSchema.optional(),
+  daily: z.array(OwmOneCallDailyItemSchema).optional(),
+  alerts: z
+    .array(
+      z.object({
+        sender_name: z.string(),
+        event: z.string(),
+        start: z.number(),
+        end: z.number(),
+        description: z.string(),
+        tags: z.array(z.string()),
+      }),
+    )
+    .optional(),
+});
+export type OwmOneCallResponse = z.infer<typeof OwmOneCallResponseSchema>;
