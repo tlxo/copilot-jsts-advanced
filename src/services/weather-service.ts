@@ -47,7 +47,7 @@ export class WeatherService {
     units: TemperatureUnit = 'celsius',
     locationName?: string,
   ): Promise<CurrentWeather> {
-    const data = await this.client.getCurrentWeather(lat, lon);
+    const data = await this.client.getOneCall(lat, lon, 'minutely,hourly,daily,alerts');
     const current = data.current;
     if (!current) {
       throw new WeatherAPIError(502, 'Missing current weather data in API response');
@@ -75,7 +75,7 @@ export class WeatherService {
     units: TemperatureUnit = 'celsius',
     locationName?: string,
   ): Promise<Forecast> {
-    const data = await this.client.getForecast(lat, lon);
+    const data = await this.client.getOneCall(lat, lon, 'minutely,hourly,current,alerts');
     const mapped = mapDailyItems(data.daily ?? []);
 
     const forecastDays: ForecastDay[] = mapped.slice(0, days).map((day) => ({
@@ -92,7 +92,7 @@ export class WeatherService {
   }
 
   async getAlerts(lat: number, lon: number): Promise<WeatherAlert[]> {
-    const data = await this.client.getCurrentWeather(lat, lon);
+    const data = await this.client.getOneCall(lat, lon, 'minutely,hourly,daily,alerts');
     const current = data.current;
     if (!current) {
       throw new WeatherAPIError(502, 'Missing current weather data in API response');
