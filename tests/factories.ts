@@ -7,9 +7,9 @@ import type {
   ForecastDay,
   Forecast,
   WeatherAlert,
-  OwmCurrentWeatherResponse,
-  OwmForecastItem,
-  OwmForecastResponse,
+  OwmOneCallCurrent,
+  OwmOneCallDailyItem,
+  OwmOneCallResponse,
 } from '../src/models.js';
 
 // ── Domain Factories ──────────────────────────────────────────────────────────
@@ -92,58 +92,72 @@ export function makeWeatherAlert(overrides: Partial<WeatherAlert> = {}): Weather
   };
 }
 
-// ── OWM 2.5 API Response Factories ───────────────────────────────────────────
+// ── OWM 3.0 API Response Factories ───────────────────────────────────────────
 
-export function makeOwmCurrentWeatherResponse(
-  overrides: Partial<OwmCurrentWeatherResponse> = {},
-): OwmCurrentWeatherResponse {
+export function makeOwmCurrentWeatherData(
+  overrides: Partial<OwmOneCallCurrent> = {},
+): OwmOneCallCurrent {
   return {
+    dt: overrides.dt ?? 1718452800,
+    temp: overrides.temp ?? 15.0,
+    feels_like: overrides.feels_like ?? 13.5,
+    pressure: overrides.pressure ?? 1013,
+    humidity: overrides.humidity ?? 72,
+    wind_speed: overrides.wind_speed ?? 5.5,
+    wind_deg: overrides.wind_deg ?? 220,
     weather: overrides.weather ?? [
       { id: 802, main: 'Clouds', description: 'scattered clouds', icon: '03d' },
     ],
-    main: overrides.main ?? {
-      temp: 15.0,
-      feels_like: 13.5,
-      pressure: 1013,
-      humidity: 72,
-    },
-    wind: overrides.wind ?? { speed: 5.5, deg: 220 },
-    dt: overrides.dt ?? 1718452800,
-    name: overrides.name ?? 'London',
   };
 }
 
-export function makeOwmForecastItem(overrides: Partial<OwmForecastItem> = {}): OwmForecastItem {
+export function makeOwmOneCallDailyItem(
+  overrides: Partial<OwmOneCallDailyItem> = {},
+): OwmOneCallDailyItem {
   return {
     dt: overrides.dt ?? 1718452800,
-    main: overrides.main ?? {
-      temp: 15.0,
-      temp_min: 12.0,
-      temp_max: 18.0,
-      humidity: 65,
-    },
+    temp: overrides.temp ?? { min: 12.0, max: 18.0 },
+    humidity: overrides.humidity ?? 65,
     weather: overrides.weather ?? [
       { id: 500, main: 'Rain', description: 'light rain', icon: '10d' },
     ],
-    dt_txt: overrides.dt_txt ?? '2025-06-15 12:00:00',
   };
 }
 
-export function makeOwmForecastResponse(
-  overrides: Partial<OwmForecastResponse> = {},
-): OwmForecastResponse {
+export function makeOwmOneCallResponse(
+  overrides: Partial<OwmOneCallResponse> = {},
+): OwmOneCallResponse {
   return {
-    list: overrides.list ?? [
-      makeOwmForecastItem({ dt_txt: '2025-06-15 06:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-15 12:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-15 18:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-16 06:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-16 12:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-16 18:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-17 06:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-17 12:00:00' }),
-      makeOwmForecastItem({ dt_txt: '2025-06-17 18:00:00' }),
-    ],
-    city: overrides.city ?? { name: 'London' },
+    timezone: overrides.timezone ?? 'Europe/London',
+    current: overrides.current,
+    daily: overrides.daily,
+    alerts: overrides.alerts,
+  };
+}
+
+export function makeOwmOneCallCurrentOnly(
+  currentOverrides: Partial<OwmOneCallCurrent> = {},
+): OwmOneCallResponse {
+  return {
+    timezone: 'Europe/London',
+    current: makeOwmCurrentWeatherData(currentOverrides),
+  };
+}
+
+export function makeOwmOneCallAlertsOnly(
+  alerts: OwmOneCallResponse['alerts'] = [
+    {
+      sender_name: 'Met Office',
+      event: 'Yellow Wind Warning',
+      start: 1718452800,
+      end: 1718496000,
+      description: 'Strong winds expected...',
+      tags: ['Wind'],
+    },
+  ],
+): OwmOneCallResponse {
+  return {
+    timezone: 'Europe/London',
+    alerts,
   };
 }

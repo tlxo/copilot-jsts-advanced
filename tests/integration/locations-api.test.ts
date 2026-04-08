@@ -4,7 +4,7 @@ import { createTestApp, createTestSettings } from '../setup.js';
 import { OpenWeatherMapClient } from '../../src/services/openweathermap.js';
 import { WeatherService } from '../../src/services/weather-service.js';
 import { LocationRepository } from '../../src/repositories/location-repo.js';
-import { makeOwmCurrentWeatherResponse } from '../factories.js';
+import { makeOwmOneCallCurrentOnly } from '../factories.js';
 
 function createMockedApp() {
   const settings = createTestSettings();
@@ -189,7 +189,7 @@ describe('GET /api/locations/:id/weather', () => {
   it('returns 200 with weather for saved location', async () => {
     const { app, mockClient } = createMockedApp();
 
-    mockClient.getCurrentWeather.mockResolvedValue(makeOwmCurrentWeatherResponse());
+    mockClient.getCurrentWeather.mockResolvedValue(makeOwmOneCallCurrentOnly());
 
     const createRes = await request(app)
       .post('/api/locations')

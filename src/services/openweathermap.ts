@@ -1,6 +1,6 @@
 import type { Settings } from '../config.js';
-import type { OwmCurrentWeatherResponse, OwmForecastResponse } from '../models.js';
-import { OwmCurrentWeatherResponseSchema, OwmForecastResponseSchema } from '../models.js';
+import type { OwmOneCallResponse } from '../models.js';
+import { OwmOneCallResponseSchema } from '../models.js';
 import {
   WeatherAPIError,
   WeatherAPINotFoundError,
@@ -10,7 +10,7 @@ import {
 export class OpenWeatherMapClient {
   constructor(private settings: Settings) {}
 
-  async getCurrentWeather(lat: number, lon: number): Promise<OwmCurrentWeatherResponse> {
+  async getCurrentWeather(lat: number, lon: number): Promise<OwmOneCallResponse> {
     const url = new URL(`${this.settings.openWeatherMapBaseUrl}/weather`);
     url.searchParams.set('lat', lat.toString());
     url.searchParams.set('lon', lon.toString());
@@ -18,10 +18,10 @@ export class OpenWeatherMapClient {
     url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
 
     const json = await this.fetchApi(url);
-    return OwmCurrentWeatherResponseSchema.parse(json);
+    return OwmOneCallResponseSchema.parse(json);
   }
 
-  async getForecast(lat: number, lon: number): Promise<OwmForecastResponse> {
+  async getForecast(lat: number, lon: number): Promise<OwmOneCallResponse> {
     const url = new URL(`${this.settings.openWeatherMapBaseUrl}/forecast`);
     url.searchParams.set('lat', lat.toString());
     url.searchParams.set('lon', lon.toString());
@@ -29,7 +29,7 @@ export class OpenWeatherMapClient {
     url.searchParams.set('appid', this.settings.openWeatherMapApiKey);
 
     const json = await this.fetchApi(url);
-    return OwmForecastResponseSchema.parse(json);
+    return OwmOneCallResponseSchema.parse(json);
   }
 
   private async fetchApi(url: URL): Promise<unknown> {
